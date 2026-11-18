@@ -1,0 +1,41 @@
+name: Refresh grades
+
+# nflverse publishes new stats about 12:30 AM Eastern after the Sunday and Monday
+# night games and around midnight after Thursday's game. Each refresh runs an hour later.
+# Times are in UTC; the months limit it to the NFL season (September to February).
+on:
+  schedule:
+    - cron: "30 6 * 1,2,9-12 1"   # Monday, after Sunday Night Football
+    - cron: "30 6 * 1,2,9-12 2"   # Tuesday, after Monday Night Football
+    - cron: "0 6 * 1,2,9-12 5"    # Friday, after Thursday Night Football
+  workflow_dispatch: {}           # lets you run it by hand from the Actions tab
+
+permissions:
+  contents: write
+
+concurrency:
+  group: refresh-data
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build grades from the latest nflverse stats
+        run: python pipeline/build_data.py
+      - name: Save the new grades
+        run: |
+          if git diff --quiet -- site/data; then
+            echo "Nothing new to save."
+            exit 0
+          fi
+          git config user.name "turf-grade-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add site/data
+          git commit -m "Refresh grades with the latest stats"
+          git push
